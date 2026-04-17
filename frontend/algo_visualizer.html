@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlgoViz — Algorithm Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #1a1a24;
+    --bg4: #22222f;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0eff8;
+    --text2: #9896b4;
+    --text3: #5a5870;
+    --accent: #7c6af7;
+    --accent2: #a594ff;
+    --accent3: #c4b8ff;
+    --green: #3dd68c;
+    --red: #ff5e7a;
+    --amber: #ffb547;
+    --teal: #00d4b4;
+    --pink: #ff6bbd;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-mono); }
+
+  /* Layout */
+  #root { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar {
+    width: 240px; min-width: 240px; background: var(--bg2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    height: 56px; min-height: 56px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 16px;
+  }
+  .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Sidebar */
+  .logo {
+    padding: 18px 16px 14px; font-family: var(--font-display); font-size: 18px; font-weight: 800;
+    letter-spacing: -0.5px; color: var(--accent2); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .logo span { color: var(--text3); font-weight: 400; font-size: 11px; display: block; margin-top: 2px; font-family: var(--font-mono); }
+  .nav-section { padding: 10px 0 4px; flex-shrink: 0; }
+  .nav-label { padding: 6px 16px; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text3); }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer;
+    font-size: 12px; color: var(--text2); transition: all 0.15s; border-left: 2px solid transparent; user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: var(--bg3); }
+  .nav-item.active { color: var(--accent2); border-left-color: var(--accent); background: rgba(124,106,247,0.08); }
+  .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .nav-divider { height: 1px; background: var(--border); margin: 6px 16px; }
+
+  /* Algo picker scrollable */
+  .algo-scroll { flex: 1; overflow-y: auto; padding-bottom: 16px; }
+  .algo-scroll::-webkit-scrollbar { width: 3px; }
+  .algo-scroll::-webkit-scrollbar-track { background: transparent; }
+  .algo-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* Top bar */
+  .algo-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+  .complexity-badge {
+    padding: 3px 10px; border-radius: 100px; font-size: 10px; font-family: var(--font-mono);
+    border: 1px solid var(--border2); color: var(--text2); background: var(--bg3);
+  }
+  .complexity-badge.time { border-color: rgba(124,106,247,0.4); color: var(--accent3); background: rgba(124,106,247,0.08); }
+  .complexity-badge.space { border-color: rgba(61,214,140,0.3); color: var(--green); background: rgba(61,214,140,0.07); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .btn {
+    display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border2);
+    background: var(--bg3); color: var(--text); font-family: var(--font-mono); font-size: 11px; cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .btn:hover { background: var(--bg4); border-color: var(--border2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn svg { width: 12px; height: 12px; }
+  .speed-wrap { display: flex; align-items: center; gap: 8px; margin-left: 8px; }
+  .speed-wrap label { font-size: 10px; color: var(--text3); white-space: nowrap; }
+  input[type=range] { width: 80px; accent-color: var(--accent); }
+  .step-counter { font-size: 11px; color: var(--text3); margin-left: auto; white-space: nowrap; }
+
+  /* Input panel */
+  .input-panel { padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
+  .input-group { display: flex; align-items: center; gap: 6px; }
+  .input-group label { font-size: 10px; color: var(--text3); white-space: nowrap; }
+  .inp {
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 5px; color: var(--text);
+    font-family: var(--font-mono); font-size: 11px; padding: 5px 10px; outline: none; width: 220px;
+  }
+  .inp:focus { border-color: var(--accent); }
+  .inp-sm { width: 80px; }
+  .random-btn { padding: 5px 10px; font-size: 10px; }
+
+  /* Visualizer area */
+  .viz-area { flex: 1; overflow: auto; padding: 20px; position: relative; }
+  .viz-area::-webkit-scrollbar { width: 4px; height: 4px; }
+  .viz-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* Sorting bars */
+  .bar-container { display: flex; align-items: flex-end; gap: 3px; height: 300px; padding: 0 10px; position: relative; }
+  .bar {
+    flex: 1; border-radius: 3px 3px 0 0; transition: height 0.12s ease, background 0.12s ease;
+    position: relative; display: flex; align-items: flex-end; justify-content: center;
+    background: var(--accent);
+  }
+  .bar.comparing { background: var(--amber); }
+  .bar.swapping { background: var(--red); }
+  .bar.sorted { background: var(--green); }
+  .bar.selected { background: var(--pink); }
+  .bar-label { font-size: 9px; color: rgba(255,255,255,0.7); padding-bottom: 3px; position: absolute; bottom: 0; }
+
+  /* Search visualization */
+  .search-container { display: flex; gap: 4px; flex-wrap: wrap; padding: 20px 0; }
+  .search-cell {
+    width: 52px; height: 52px; border-radius: 8px; border: 1px solid var(--border2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-size: 13px; font-weight: 700; color: var(--text2); background: var(--bg3);
+    transition: all 0.18s ease;
+  }
+  .search-cell.active { background: var(--accent); border-color: var(--accent); color: #fff; transform: scale(1.1); }
+  .search-cell.comparing { background: rgba(255,181,71,0.2); border-color: var(--amber); color: var(--amber); }
+  .search-cell.found { background: rgba(61,214,140,0.2); border-color: var(--green); color: var(--green); transform: scale(1.15); }
+  .search-cell.eliminated { opacity: 0.3; }
+  .cell-idx { font-size: 9px; color: var(--text3); font-weight: 400; }
+
+  /* Graph visualization */
+  .graph-canvas { width: 100%; height: 380px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); }
+
+  /* Tree visualization */
+  .tree-canvas { width: 100%; height: 360px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); }
+
+  /* DP table */
+  .dp-table-wrap { overflow-x: auto; }
+  .dp-table { border-collapse: collapse; font-size: 12px; }
+  .dp-table td, .dp-table th {
+    width: 42px; height: 36px; text-align: center; border: 1px solid var(--border);
+    transition: all 0.2s ease; color: var(--text2); font-family: var(--font-mono);
+  }
+  .dp-table th { background: var(--bg3); color: var(--text3); font-size: 10px; font-weight: 400; }
+  .dp-table td.active { background: rgba(124,106,247,0.3); color: var(--accent2); border-color: var(--accent); }
+  .dp-table td.done { background: rgba(61,214,140,0.12); color: var(--green); }
+
+  /* String visualization */
+  .string-row { display: flex; gap: 3px; margin-bottom: 8px; align-items: center; }
+  .string-char {
+    width: 34px; height: 34px; border-radius: 5px; border: 1px solid var(--border2);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+    color: var(--text2); background: var(--bg3); transition: all 0.18s; flex-shrink: 0;
+  }
+  .string-char.match { background: rgba(61,214,140,0.2); border-color: var(--green); color: var(--green); }
+  .string-char.mismatch { background: rgba(255,94,122,0.2); border-color: var(--red); color: var(--red); }
+  .string-char.active { background: rgba(124,106,247,0.25); border-color: var(--accent); color: var(--accent2); }
+  .string-char.found { background: rgba(0,212,180,0.2); border-color: var(--teal); color: var(--teal); }
+  .string-label { font-size: 10px; color: var(--text3); width: 60px; flex-shrink: 0; }
+
+  /* Step info panel */
+  .step-panel { background: var(--bg2); border-top: 1px solid var(--border); padding: 10px 20px; display: flex; gap: 20px; align-items: flex-start; flex-shrink: 0; min-height: 56px; }
+  .step-type { padding: 2px 8px; border-radius: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; flex-shrink: 0; }
+  .step-type.compare  { background: rgba(255,181,71,0.15); color: var(--amber); }
+  .step-type.swap     { background: rgba(255,94,122,0.15);  color: var(--red); }
+  .step-type.visit    { background: rgba(124,106,247,0.15); color: var(--accent2); }
+  .step-type.update   { background: rgba(0,212,180,0.15);   color: var(--teal); }
+  .step-type.found    { background: rgba(61,214,140,0.15);  color: var(--green); }
+  .step-type.complete { background: rgba(61,214,140,0.15);  color: var(--green); }
+  .step-type.select   { background: rgba(255,107,189,0.15); color: var(--pink); }
+  .step-type.highlight{ background: rgba(255,181,71,0.12);  color: var(--amber); }
+  .step-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+  /* Progress bar */
+  .progress-bar { height: 2px; background: var(--bg4); flex-shrink: 0; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width 0.1s ease; }
+
+  /* Welcome screen */
+  .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; color: var(--text3); }
+  .welcome h2 { font-family: var(--font-display); font-size: 24px; color: var(--text); font-weight: 700; }
+  .welcome p { font-size: 12px; text-align: center; max-width: 300px; line-height: 1.8; }
+
+  /* Category tag */
+  .cat-tag { padding: 2px 8px; border-radius: 100px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+  .cat-sorting  { background: rgba(124,106,247,0.15); color: var(--accent2); }
+  .cat-searching{ background: rgba(0,212,180,0.15);   color: var(--teal); }
+  .cat-graph    { background: rgba(255,181,71,0.15);  color: var(--amber); }
+  .cat-dp       { background: rgba(61,214,140,0.15);  color: var(--green); }
+  .cat-tree     { background: rgba(255,107,189,0.15); color: var(--pink); }
+  .cat-string   { background: rgba(255,94,122,0.15);  color: var(--red); }
+  .cat-window   { background: rgba(255,181,71,0.15);  color: var(--amber); }
+
+  /* Window viz */
+  .window-cell {
+    width: 52px; height: 52px; border-radius: 6px; border: 1px solid var(--border2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--bg3); transition: all 0.2s; font-size: 14px; font-weight: 700; color: var(--text2);
+  }
+  .window-cell.in-window { background: rgba(124,106,247,0.2); border-color: var(--accent); color: var(--accent2); }
+  .window-cell.max { background: rgba(61,214,140,0.2); border-color: var(--green); color: var(--green); }
+  .window-cell.removed { opacity: 0.3; }
+
+  /* WebSocket status indicator */
+  .ws-status {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; transition: background 0.3s;
+  }
+  .ws-status.connected    { background: var(--green); }
+  .ws-status.connecting   { background: var(--amber); animation: ws-pulse 1s ease-in-out infinite; }
+  .ws-status.disconnected { background: var(--red); }
+  .ws-status.loading      { background: var(--accent2); animation: ws-pulse 0.7s ease-in-out infinite; }
+  @keyframes ws-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  .status-label { font-size: 10px; color: var(--text3); }
+
+  /* Streaming progress animation */
+  .loading-bar { height: 2px; background: var(--bg4); flex-shrink: 0; overflow: hidden; }
+  .loading-bar.active::after {
+    content: ''; display: block; height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: sweep 1.2s ease-in-out infinite; width: 40%;
+  }
+  @keyframes sweep { 0%{transform:translateX(-200%)} 100%{transform:translateX(600%)} }
+
+  /* Danger button variant */
+  .btn.danger { background: rgba(255,94,122,0.12); border-color: rgba(255,94,122,0.35); color: var(--red); }
+  .btn.danger:hover { background: rgba(255,94,122,0.22); }
+
+  /* Error toast */
+  .error-toast {
+    position: absolute; top: 16px; right: 16px; z-index: 100;
+    background: rgba(255,94,122,0.1); border: 1px solid rgba(255,94,122,0.4);
+    border-radius: 8px; padding: 10px 16px; font-size: 12px; color: var(--red);
+    max-width: 340px; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start;
+    white-space: pre-line;
+  }
+  .error-toast-close { cursor: pointer; opacity: 0.6; flex-shrink: 0; }
+  .error-toast-close:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  ALGORITHM REGISTRY  — UI metadata only, zero computation logic
+// ═══════════════════════════════════════════════════════════════════════════
+const ALGORITHMS = {
+  sorting: [
+    { id: 'bubble_sort',    name: 'Bubble Sort',    time: 'O(n²)',      space: 'O(1)' },
+    { id: 'selection_sort', name: 'Selection Sort', time: 'O(n²)',      space: 'O(1)' },
+    { id: 'insertion_sort', name: 'Insertion Sort', time: 'O(n²)',      space: 'O(1)' },
+    { id: 'merge_sort',     name: 'Merge Sort',     time: 'O(n log n)', space: 'O(n)' },
+    { id: 'quick_sort',     name: 'Quick Sort',     time: 'O(n log n)', space: 'O(log n)' },
+    { id: 'heap_sort',      name: 'Heap Sort',      time: 'O(n log n)', space: 'O(1)' },
+  ],
+  searching: [
+    { id: 'linear_search', name: 'Linear Search', time: 'O(n)',     space: 'O(1)' },
+    { id: 'binary_search', name: 'Binary Search', time: 'O(log n)', space: 'O(1)' },
+  ],
+  graph: [
+    { id: 'bfs',      name: 'BFS',      time: 'O(V+E)',       space: 'O(V)' },
+    { id: 'dfs',      name: 'DFS',      time: 'O(V+E)',       space: 'O(V)' },
+    { id: 'dijkstra', name: 'Dijkstra', time: 'O((V+E)logV)', space: 'O(V)' },
+    { id: 'kruskal',  name: 'Kruskal',  time: 'O(E log E)',   space: 'O(V)' },
+    { id: 'prim',     name: 'Prim',     time: 'O((V+E)logV)', space: 'O(V)' },
+  ],
+  dp: [
+    { id: 'fibonacci',   name: 'Fibonacci',    time: 'O(n)',   space: 'O(n)' },
+    { id: 'knapsack_01', name: '0/1 Knapsack', time: 'O(nW)', space: 'O(nW)' },
+    { id: 'lcs',         name: 'LCS',          time: 'O(mn)', space: 'O(mn)' },
+    { id: 'lis',         name: 'LIS',          time: 'O(n²)', space: 'O(n)' },
+  ],
+  tree: [
+    { id: 'inorder_traversal',      name: 'Inorder',     time: 'O(n)', space: 'O(h)' },
+    { id: 'preorder_traversal',     name: 'Preorder',    time: 'O(n)', space: 'O(h)' },
+    { id: 'postorder_traversal',    name: 'Postorder',   time: 'O(n)', space: 'O(h)' },
+    { id: 'level_order_traversal',  name: 'Level Order', time: 'O(n)', space: 'O(n)' },
+    { id: 'bst_insert',             name: 'BST Insert',  time: 'O(h)', space: 'O(h)' },
+    { id: 'lowest_common_ancestor', name: 'LCA',         time: 'O(n)', space: 'O(h)' },
+  ],
+  string: [
+    { id: 'kmp_search',  name: 'KMP',         time: 'O(n+m)', space: 'O(m)' },
+    { id: 'rabin_karp',  name: 'Rabin-Karp',  time: 'O(n+m)', space: 'O(1)' },
+    { id: 'z_algorithm', name: 'Z Algorithm', time: 'O(n+m)', space: 'O(n+m)' },
+  ],
+  window: [
+    { id: 'max_subarray_sum',         name: 'Max Subarray Sum', time: 'O(n)', space: 'O(1)' },
+    { id: 'longest_unique_substring', name: 'Longest Unique',   time: 'O(n)', space: 'O(k)' },
+    { id: 'subarray_sum_k',           name: 'Subarray Sum K',   time: 'O(n)', space: 'O(n)' },
+  ],
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATIC RENDERING DATA  — layout coords for graph & tree renderers only
+// ═══════════════════════════════════════════════════════════════════════════
+const SAMPLE_GRAPH = {
+  nodes: ['A','B','C','D','E','F'],
+  edges: [['A','B',4],['A','C',2],['B','D',5],['C','B',1],['C','E',10],['D','F',2],['E','F',3]],
+  positions: { A:[100,180], B:[260,80], C:[260,280], D:[420,80], E:[420,280], F:[560,180] },
+};
+
+function getTreePositions(values) {
+  const pos = {}, W = 600;
+  const levels = {};
+  values.forEach((v, i) => {
+    if (v == null) return;
+    const lv = Math.floor(Math.log2(i + 1));
+    (levels[lv] = levels[lv] || []).push({ v, i });
+  });
+  Object.entries(levels).forEach(([lv, nodes]) => {
+    const y = 40 + lv * 80;
+    nodes.forEach(({ v, i }, k) => {
+      const x = W / 2 + (k - (nodes.length - 1) / 2) * (W / (nodes.length + 1));
+      pos[i] = { x, y, v };
+    });
+  });
+  return pos;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  APPLICATION STATE
+// ═══════════════════════════════════════════════════════════════════════════
+const state = {
+  algo: null,
+
+  // Step buffer — populated ONLY by WebSocket messages from the backend
+  steps: [],
+  currentStep: -1,
+
+  // Playback
+  playing: false,
+  speed: 300,
+  timer: null,
+
+  // WebSocket
+  ws: null,
+  wsStatus: 'disconnected',  // 'disconnected' | 'connecting' | 'connected' | 'loading'
+  streaming: false,
+
+  // Error
+  error: null,
+
+  // User inputs
+  sortArray:        [64,34,25,12,22,11,90],
+  searchArray:      [2,5,8,12,16,23,38,56,72,91],
+  searchTarget:     23,
+  treeValues:       [1,2,3,4,5,6,7,8,9],
+  searchString:     'abcxabcdabxabcdabcdabcy',
+  searchPattern:    'abcdabcy',
+  windowArray:      [2,1,5,1,3,2],
+  windowK:          3,
+  fibN:             10,
+  lisArray:         [10,9,2,5,3,7,101,18],
+  lcsS1:            'AGGTAB',
+  lcsS2:            'GXTXAYB',
+  knapsackWeights:  [2,3,4,5],
+  knapsackValues:   [3,4,5,6],
+  knapsackCap:      5,
+  treeInsertVal:    10,
+  lcaP:             4,
+  lcaQ:             5,
+  graphInput: `A:B(4),C(2)
+    B:D(5)
+    C:B(1),E(10)
+    D:F(2)
+    E:F(3)
+    F:`,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  INPUT → BACKEND PAYLOAD MAPPER
+//  Translates UI inputs into the exact JSON format the FastAPI backend expects.
+// ═══════════════════════════════════════════════════════════════════════════
+function parseGraphInput(text) {
+  const graph = {};
+  const lines = text.split('\n');
+
+  lines.forEach(line => {
+    if (!line.trim()) return;
+    const [node, edges] = line.split(':');
+    graph[node.trim()] = [];
+
+    if (edges) {
+      edges.split(',').forEach(e => {
+        const match = e.match(/(\w+)\((\d+)\)/);
+        if (match) {
+          graph[node.trim()].push([match[1], Number(match[2])]);
+        }
+      });
+    }
+  });
+
+  return graph;
+}
+
+
+function buildPayload(algoId) {
+  const cat      = getCategoryOfAlgo(algoId);
+  const delay_ms = state.speed;
+
+  switch (cat) {
+    case 'sorting':
+      return { type: 'sort', algorithm: algoId, array: state.sortArray, delay_ms };
+
+    case 'searching':
+      return { type: 'search', algorithm: algoId, array: state.searchArray,
+               target: state.searchTarget, delay_ms };
+
+    case 'graph': {
+      const graph = parseGraphInput(state.graphInput);
+
+      return {
+        type: 'graph',
+      algorithm: algoId,
+      graph,
+      start: Object.keys(graph)[0],
+      delay_ms
+      };
+    }
+
+    case 'dp':
+      if (algoId === 'fibonacci')
+        return { type: 'dp', algorithm: algoId, n: state.fibN, delay_ms };
+      if (algoId === 'lis')
+        return { type: 'dp', algorithm: algoId, array: state.lisArray, delay_ms };
+      if (algoId === 'lcs')
+        return { type: 'dp', algorithm: algoId, s1: state.lcsS1, s2: state.lcsS2, delay_ms };
+      if (algoId === 'knapsack_01')
+        return { type: 'dp', algorithm: algoId, weights: state.knapsackWeights,
+                 values: state.knapsackValues, capacity: state.knapsackCap, delay_ms };
+      return { type: 'dp', algorithm: algoId, delay_ms };
+
+    case 'tree':
+      if (algoId === 'bst_insert')
+        return { type: 'tree', algorithm: algoId, tree: state.treeValues, insert_val: state.treeInsertVal, delay_ms };
+
+      if (algoId === 'lowest_common_ancestor')
+        return { type: 'tree', algorithm: algoId, tree: state.treeValues, p: state.lcaP, q: state.lcaQ, delay_ms };
+
+      return { type: 'tree', algorithm: algoId, tree: state.treeValues, delay_ms };
+
+
+    case 'string':
+      return { type: 'string', algorithm: algoId,
+               text: state.searchString, pattern: state.searchPattern, delay_ms };
+
+    case 'window':
+      if (algoId === 'longest_unique_substring')
+        return { type: 'window', algorithm: algoId, string: state.searchString, delay_ms };
+      return { type: 'window', algorithm: algoId,
+               array: state.windowArray, k: state.windowK, delay_ms };
+
+    default:
+      return { type: cat, algorithm: algoId, delay_ms };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  WEBSOCKET LAYER
+// ═══════════════════════════════════════════════════════════════════════════
+const WS_URL = 'ws://localhost:8000/ws/algorithm';
+
+function connectAndRun(payload) {
+  // Tear down any existing socket cleanly
+  if (state.ws) {
+    state.ws.onopen = state.ws.onmessage = state.ws.onerror = state.ws.onclose = null;
+    if (state.ws.readyState !== WebSocket.CLOSED) state.ws.close();
+    state.ws = null;
+  }
+
+  state.wsStatus = 'connecting';
+  state.error    = null;
+  render();
+
+  const ws = new WebSocket(WS_URL);
+  state.ws = ws;
+
+  ws.onopen = () => {
+    state.wsStatus = 'connected';
+    render();
+    ws.send(JSON.stringify(payload));
+  };
+
+  ws.onmessage = (event) => {
+    let msg;
+    try { msg = JSON.parse(event.data); } catch { return; }
+    handleMessage(msg);
+  };
+
+  ws.onerror = () => {
+    setError(
+      'Cannot reach backend at ws://localhost:8000.\n' +
+      'Run: uvicorn main:app --reload --port 8000'
+    );
+    state.wsStatus = 'disconnected';
+    state.streaming = false;
+    render();
+  };
+
+  ws.onclose = () => {
+    state.wsStatus = 'disconnected';
+    state.streaming = false;
+    render();
+  };
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'start':
+      // Reset buffer; backend is about to stream steps
+      state.steps       = [];
+      state.currentStep = -1;
+      state.streaming   = true;
+      state.wsStatus    = 'loading';
+      state.error       = null;
+      pausePlayback();
+      render();
+      break;
+    
+    case 'step':
+      state.steps.push(normaliseStep(msg.data));
+      state.currentStep = state.steps.length - 1;
+      animateStepChange();   // ✅ ADD HERE
+      render();
+      break;
+
+    case 'done':
+      state.streaming = false;
+      state.wsStatus  = 'connected';
+      // Keep currentStep at the last received step (final state visible)
+      if (state.steps.length && state.currentStep < 0)
+        state.currentStep = state.steps.length - 1;
+      render();
+      break;
+
+    case 'error':
+      setError(msg.message || 'Backend returned an error');
+      state.streaming = false;
+      state.wsStatus  = 'connected';
+      render();
+      break;
+  }
+}
+
+// Map backend step format → internal format ('description' → 'desc')
+function normaliseStep(raw) {
+  return {
+    type:    raw.type        || 'update',
+    desc:    raw.description || raw.desc || '',
+    indices: raw.indices     || [],
+    array:   raw.array       || [],
+    extra:   raw.extra       || {},
+  };
+}
+
+function stopWS() {
+  state.streaming = false;
+  pausePlayback();
+  if (state.ws) {
+    state.ws.onopen = state.ws.onmessage = state.ws.onerror = state.ws.onclose = null;
+    state.ws.close();
+    state.ws = null;
+  }
+  state.wsStatus = 'disconnected';
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RUN — the only entry point for algorithm execution
+// ═══════════════════════════════════════════════════════════════════════════
+function runAlgo() {
+  if (!state.algo) return;
+  pausePlayback();
+  state.steps       = [];
+  state.currentStep = -1;
+  state.error       = null;
+
+  const payload = buildPayload(state.algo.id);
+
+  // Reuse an open socket to avoid reconnect overhead
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.steps     = [];
+    state.streaming = true;
+    state.wsStatus  = 'loading';
+    render();
+    state.ws.send(JSON.stringify(payload));
+  } else {
+    connectAndRun(payload);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PLAYBACK CONTROLS  — operate on state.steps[], never generate steps
+// ═══════════════════════════════════════════════════════════════════════════
+function pausePlayback() {
+  clearInterval(state.timer);
+  state.playing = false;
+}
+
+function play() {
+  if (!state.steps.length) return;
+  if (state.currentStep >= state.steps.length - 1) state.currentStep = -1;
+  state.playing = true;
+  state.timer = setInterval(() => {
+    if (state.currentStep >= state.steps.length - 1) { pausePlayback(); render(); return; }
+    state.currentStep++;
+    render();
+  }, state.speed);
+  render();
+}
+
+function pause() { pausePlayback(); render(); }
+
+function reset() { pausePlayback(); state.currentStep = -1; render(); }
+
+function stepTo(idx) {
+  if (idx < 0 || idx >= state.steps.length) return;
+  state.currentStep = idx;
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RANDOMIZE  — mutates inputs only, never triggers execution
+// ═══════════════════════════════════════════════════════════════════════════
+function randomize() {
+  const cat = state.algo ? getCategoryOfAlgo(state.algo.id) : 'sorting';
+  if (cat === 'sorting')
+    state.sortArray = Array.from({length:12}, () => Math.floor(Math.random()*95)+5);
+  if (cat === 'searching') {
+    state.searchArray = [...new Set(Array.from({length:12},()=>Math.floor(Math.random()*99)+1))].sort((a,b)=>a-b);
+    state.searchTarget = state.searchArray[Math.floor(Math.random()*state.searchArray.length)];
+  }
+  if (cat === 'window')
+    state.windowArray = Array.from({length:8}, () => Math.floor(Math.random()*15)+1);
+  if (cat === 'dp' && state.algo?.id === 'lis')
+    state.lisArray = Array.from({length:8}, () => Math.floor(Math.random()*50)+1);
+  pausePlayback();
+  state.steps = [];
+  state.currentStep = -1;
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ERROR HANDLING
+// ═══════════════════════════════════════════════════════════════════════════
+function setError(msg) { state.error = msg; pausePlayback(); render(); }
+function clearError()  { state.error = null; render(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  UTILITY
+// ═══════════════════════════════════════════════════════════════════════════
+function getCategoryOfAlgo(id) {
+  for (const [cat, algos] of Object.entries(ALGORITHMS))
+    if (algos.find(a => a.id === id)) return cat;
+  return 'sorting';
+}
+
+function catColor(cat) {
+  return {sorting:'#7c6af7',searching:'#00d4b4',graph:'#ffb547',
+          dp:'#3dd68c',tree:'#ff6bbd',string:'#ff5e7a',window:'#ffb547'}[cat] || '#9896b4';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  VISUALIZERS  — pure renderers; read state.steps[], never compute anything
+// ═══════════════════════════════════════════════════════════════════════════
+
+function animateStepChange() {
+  document.querySelector('.viz-area')?.animate([
+    { opacity: 0.7, transform: 'scale(0.99)' },
+    { opacity: 1, transform: 'scale(1)' }
+  ], { duration: 150 });
+}
+
+function renderSortViz(step) {
+  const arr    = step ? step.array : state.sortArray;
+  const maxVal = Math.max(...arr, 1);
+  const active = new Set(step?.indices || []);
+  const type   = step?.type || '';
+  return arr.map((v, i) => {
+    let cls = 'bar';
+    if (type === 'complete') cls += ' sorted';
+    else if (active.has(i)) {
+      cls += type === 'compare' ? ' comparing'
+           : type === 'swap'    ? ' swapping'
+           : type === 'sorted'  ? ' sorted'
+           : type === 'select'  ? ' selected'
+           : ' comparing';
+    }
+    const h = Math.max(8, (v / maxVal) * 260);
+    return `<div class="${cls}" style="height:${h}px" title="${v}">${arr.length <= 20 ? `<span class="bar-label">${v}</span>` : ''}</div>`;
+  }).join('');
+}
+
+function renderSearchViz(step) {
+  const arr    = step ? step.array : state.searchArray;
+  const active = new Set(step?.indices || []);
+  const type   = step?.type || '';
+  const extra  = step?.extra || {};
+  return arr.map((v, i) => {
+    let cls = 'search-cell';
+    if (type === 'found' && active.has(i)) cls += ' found';
+    else if (active.has(i))               cls += ' comparing';
+    if (extra.eliminated === 'left'  && i < (extra.mid ?? Infinity)) cls += ' eliminated';
+    if (extra.eliminated === 'right' && i > (extra.mid ?? -1))       cls += ' eliminated';
+    return `<div class="${cls}"><span>${v}</span><span class="cell-idx">${i}</span></div>`;
+  }).join('');
+}
+
+function renderGraphViz(step) {
+  const { nodes, edges, positions } = SAMPLE_GRAPH;
+  const extra         = step?.extra || {};
+  const visited       = new Set(extra.visited || []);
+  const activeEdgeSet = new Set(
+    (extra.active_edges || extra.activeEdges || []).map(e => `${e[0]}-${e[1]}`)
+  );
+  const current = extra.current;
+  const dist    = extra.distances || extra.dist || {};
+  const W = 620, H = 340;
+ 
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:var(--font-mono)">`;
+  svg += `<defs><marker id="ah" viewBox="0 0 10 10" refX="30" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/></marker></defs>`;
+ 
+  edges.forEach(([u, v, w]) => {
+    const [x1,y1] = positions[u], [x2,y2] = positions[v];
+    const isActive  = activeEdgeSet.has(`${u}-${v}`);
+    const isVisited = visited.has(u) && visited.has(v);
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+      stroke="${isActive?'#7c6af7':isVisited?'#3dd68c':'rgba(255,255,255,0.1)'}"
+      stroke-width="${isActive?2.5:1.5}" marker-end="url(#ah)"/>`;
+    svg += `<text x="${(x1+x2)/2+10}" y="${(y1+y2)/2-6}" fill="rgba(255,255,255,0.4)" font-size="10">${w}</text>`;
+  });
+ 
+  nodes.forEach(n => {
+    const [x, y]  = positions[n];
+    const isVisited = visited.has(n);
+    const isCurrent = current === n;
+    const fill   = isCurrent ? '#7c6af7' : isVisited ? '#3dd68c' : '#22222f';
+    const stroke = isCurrent ? '#a594ff' : isVisited ? '#3dd68c' : 'rgba(255,255,255,0.15)';
+    svg += `<circle cx="${x}" cy="${y}" r="24" fill="${fill}" stroke="${stroke}" stroke-width="${isCurrent?2.5:1.5}"/>`;
+    svg += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central"
+              fill="${isCurrent||isVisited?'#fff':'#9896b4'}" font-size="14" font-weight="700">${n}</text>`;
+    const d = dist[n];
+    if (d !== undefined && d !== null && isFinite(d))
+      svg += `<text x="${x}" y="${y+32}" text-anchor="middle" fill="#ffb547" font-size="10">${d}</text>`;
+  });
+ 
+  return svg + '</svg>';
+}
+
+function renderTreeViz(step) {
+  const values    = state.treeValues;
+  const positions = getTreePositions(values);
+  const extra     = step?.extra || {};
+  const visited   = new Set(extra.visited || []);
+  const activeIdx = new Set(step?.indices || []);
+  const W = 620, H = 320;
+ 
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:var(--font-mono)">`;
+  values.forEach((v, i) => {
+    if (v == null || !positions[i]) return;
+    [2*i+1, 2*i+2].forEach(ci => {
+      if (ci < values.length && values[ci] != null && positions[ci]) {
+        const {x:x1,y:y1} = positions[i], {x:x2,y:y2} = positions[ci];
+        svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>`;
+      }
+    });
+  });
+  values.forEach((v, i) => {
+    if (v == null || !positions[i]) return;
+    const {x, y}    = positions[i];
+    const isActive  = activeIdx.has(i);
+    const isVisited = visited.has(v);
+    const fill   = isActive ? '#7c6af7' : isVisited ? '#3dd68c' : '#22222f';
+    const stroke = isActive ? '#a594ff' : isVisited ? '#3dd68c' : 'rgba(255,255,255,0.15)';
+    svg += `<circle cx="${x}" cy="${y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${isActive?2.5:1.5}"/>`;
+    svg += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central"
+              fill="${isActive||isVisited?'#fff':'#9896b4'}" font-size="13" font-weight="700">${v}</text>`;
+  });
+  return svg + '</svg>';
+}
+ 
+function renderDPViz(step) {
+  const extra    = step?.extra || {};
+  const table    = extra.table || step?.array || [];
+  const activeIdx = new Set(step?.indices || []);
+  const type     = step?.type || '';
+  if (!table.length)
+    return '<div style="color:var(--text3);padding:20px">Run algorithm to see DP table</div>';
+  let html = '<div class="dp-table-wrap"><table class="dp-table"><thead><tr><th>i</th>';
+  table.forEach((_, i) => { html += `<th>${i}</th>`; });
+  html += '</tr></thead><tbody><tr><td style="color:var(--text3)">dp</td>';
+  table.forEach((v, i) => {
+    const isActive = activeIdx.has(i);
+    const isDone   = type === 'complete' || (!isActive && step?.indices?.[0] !== undefined && i < step.indices[0]);
+    html += `<td class="${isActive?'active':isDone?'done':''}">${v}</td>`;
+  });
+  html += '</tr></tbody></table></div>';
+  if (extra.result !== undefined)
+    html += `<div style="margin-top:16px;color:var(--green);font-size:14px">Result = ${extra.result}</div>`;
+  return html;
+}
+
+function renderStringViz(step) {
+  const extra      = step?.extra || {};
+  const text       = extra.text    || state.searchString;
+  const pattern    = extra.pattern || state.searchPattern;
+  const activeText = step?.indices?.[0] ?? -1;
+  const activePat  = step?.indices?.[1] ?? -1;
+  const matches    = new Set(extra.matches || []);
+  const matchLen   = pattern.length;
+  const phase      = extra.phase || '';
+
+  const inMatch = new Set();
+  matches.forEach(start => { for (let k = 0; k < matchLen; k++) inMatch.add(start + k); });
+
+  let html = `<div class="string-row">
+    <div class="string-label">text</div>
+    ${Array.from(text).map((c, i) => {
+      const cls = 'string-char' + (inMatch.has(i) ? ' found' : i === activeText ? ' active' : '');
+      return `<div class="${cls}">${c}</div>`;
+    }).join('')}
+  </div>`;
+
+  if (phase === 'search' || phase === 'lps_done' || !phase) {
+    const offset = Math.max(0, activeText - activePat);
+    html += `<div class="string-row">
+      <div class="string-label">pattern</div>
+      <div style="margin-left:${offset * 37}px;display:flex;gap:3px">
+        ${Array.from(pattern).map((c, i) => {
+          const cls = 'string-char' + (i === activePat ? ' active' : '');
+          return `<div class="${cls}">${c}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  if (extra.matches?.length)
+    html += `<div style="margin-top:12px;font-size:12px;color:var(--green)">Matches at: [${extra.matches.join(', ')}]</div>`;
+  if (extra.lps)
+    html += `<div style="margin-top:8px;font-size:11px;color:var(--text3)">LPS: [${extra.lps.join(', ')}]</div>`;
+  return html;
+}
+
+function renderWindowViz(step) {
+  const arr        = step?.array || state.windowArray;
+  const extra      = step?.extra || {};
+  const left       = extra.left ?? -1;
+  const right      = extra.right ?? -1;
+  const maxWindow  = extra.maxWindow || extra.max_window || [];
+  return `<div style="display:flex;gap:4px;margin-bottom:16px">
+    ${arr.map((v, i) => {
+      let cls = 'window-cell';
+      if (maxWindow[0] !== undefined && i >= maxWindow[0] && i <= maxWindow[1] && extra.maxSum !== undefined) cls += ' max';
+      else if (i >= left && i <= right) cls += ' in-window';
+      return `<div class="${cls}"><span>${v}</span><span style="font-size:9px;color:var(--text3);margin-top:2px">${i}</span></div>`;
+    }).join('')}
+  </div>
+  ${extra.sum    !== undefined ? `<div style="font-size:13px;color:var(--text2)">Window sum: <span style="color:var(--accent2);font-weight:700">${extra.sum}</span></div>` : ''}
+  ${extra.maxSum !== undefined ? `<div style="font-size:13px;color:var(--text2)">Max sum: <span style="color:var(--green);font-weight:700">${extra.maxSum}</span></div>` : ''}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  INPUT PANEL — per-category UI controls; binds to state only
+// ═══════════════════════════════════════════════════════════════════════════
+function renderInputPanel(cat) {
+  const id = state.algo?.id;
+  switch (cat) {
+    case 'sorting':
+      return `<div class="input-group"><label>Array</label>
+        <input class="inp" value="${state.sortArray.join(',')}"
+          oninput="state.sortArray=this.value.split(',').map(Number).filter(n=>!isNaN(n))"></div>`;
+
+    case 'searching':
+      return `<div class="input-group"><label>Array</label>
+          <input class="inp" value="${state.searchArray.join(',')}"
+            oninput="state.searchArray=this.value.split(',').map(Number).filter(n=>!isNaN(n))"></div>
+        <div class="input-group"><label>Target</label>
+          <input class="inp inp-sm" value="${state.searchTarget}"
+            oninput="state.searchTarget=parseInt(this.value)"></div>`;
+
+    case 'graph':
+      return `
+        <div class="input-group">
+        <label>Graph</label>
+        <textarea class="inp" style="height:80px"
+        oninput="state.graphInput=this.value">${state.graphInput}</textarea>
+      </div>
+      `;
+
+    case 'dp':
+      if (id === 'fibonacci')
+        return `<div class="input-group"><label>N</label>
+          <input class="inp inp-sm" value="${state.fibN}" oninput="state.fibN=parseInt(this.value)"></div>`;
+      if (id === 'lis')
+        return `<div class="input-group"><label>Array</label>
+          <input class="inp" value="${state.lisArray.join(',')}"
+            oninput="state.lisArray=this.value.split(',').map(Number).filter(n=>!isNaN(n))"></div>`;
+      if (id === 'lcs')
+        return `<div class="input-group"><label>S1</label>
+            <input class="inp inp-sm" value="${state.lcsS1}" oninput="state.lcsS1=this.value"></div>
+          <div class="input-group"><label>S2</label>
+            <input class="inp inp-sm" value="${state.lcsS2}" oninput="state.lcsS2=this.value"></div>`;
+      if (id === 'knapsack_01')
+        return `<div class="input-group"><label>Weights</label>
+            <input class="inp inp-sm" value="${state.knapsackWeights.join(',')}"
+              oninput="state.knapsackWeights=this.value.split(',').map(Number)"></div>
+          <div class="input-group"><label>Values</label>
+            <input class="inp inp-sm" value="${state.knapsackValues.join(',')}"
+              oninput="state.knapsackValues=this.value.split(',').map(Number)"></div>
+          <div class="input-group"><label>Cap</label>
+            <input class="inp inp-sm" value="${state.knapsackCap}"
+              oninput="state.knapsackCap=parseInt(this.value)"></div>`;
+      return `<div style="font-size:11px;color:var(--text3)">Using default input for ${state.algo?.name}</div>`;
+
+    case 'tree':
+  if (id === 'bst_insert')
+    return `
+      <div class="input-group">
+        <label>Tree</label>
+        <input class="inp" value="${state.treeValues.join(',')}"
+          oninput="state.treeValues=this.value.split(',').map(v=>v==='null'?null:Number(v))">
+      </div>
+      <div class="input-group">
+        <label>Insert</label>
+        <input class="inp inp-sm" value="${state.treeInsertVal}"
+          oninput="state.treeInsertVal=parseInt(this.value)">
+      </div>
+    `;
+
+  if (id === 'lowest_common_ancestor')
+    return `
+      <div class="input-group">
+        <label>Tree</label>
+        <input class="inp" value="${state.treeValues.join(',')}"
+          oninput="state.treeValues=this.value.split(',').map(v=>v==='null'?null:Number(v))">
+      </div>
+      <div class="input-group">
+        <label>P</label>
+        <input class="inp inp-sm" value="${state.lcaP}"
+          oninput="state.lcaP=parseInt(this.value)">
+      </div>
+      <div class="input-group">
+        <label>Q</label>
+        <input class="inp inp-sm" value="${state.lcaQ}"
+          oninput="state.lcaQ=parseInt(this.value)">
+      </div>
+    `;
+
+  return `
+    <div class="input-group">
+      <label>Tree</label>
+      <input class="inp" value="${state.treeValues.join(',')}"
+        oninput="state.treeValues=this.value.split(',').map(v=>v==='null'?null:Number(v))">
+    </div>
+  `;
+
+    case 'string':
+      return `<div class="input-group"><label>Text</label>
+          <input class="inp" value="${state.searchString}" oninput="state.searchString=this.value"></div>
+        <div class="input-group"><label>Pattern</label>
+          <input class="inp inp-sm" value="${state.searchPattern}" oninput="state.searchPattern=this.value"></div>`;
+
+    case 'window':
+      if (id === 'longest_unique_substring')
+        return `<div class="input-group"><label>String</label>
+          <input class="inp" value="${state.searchString}" oninput="state.searchString=this.value"></div>`;
+      return `<div class="input-group"><label>Array</label>
+          <input class="inp" value="${state.windowArray.join(',')}"
+            oninput="state.windowArray=this.value.split(',').map(Number).filter(n=>!isNaN(n))"></div>
+        <div class="input-group"><label>K</label>
+          <input class="inp inp-sm" value="${state.windowK}" oninput="state.windowK=parseInt(this.value)"></div>`;
+
+    default: return '';
+  }
+}
+
+function renderViz(step, cat) {
+  if (!cat) return '';
+  switch (cat) {
+    case 'sorting':   return `<div class="bar-container">${renderSortViz(step)}</div>`;
+    case 'searching': return `<div class="search-container">${renderSearchViz(step)}</div>`;
+    case 'graph':     return `<div class="graph-canvas">${renderGraphViz(step)}</div>`;
+    case 'tree':      return `<div class="tree-canvas">${renderTreeViz(step)}</div>`;
+    case 'dp':        return renderDPViz(step);
+    case 'string':    return renderStringViz(step);
+    case 'window':    return renderWindowViz(step);
+    default:          return '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RENDER — builds the full UI from current state
+// ═══════════════════════════════════════════════════════════════════════════
+function render() {
+  const step     = state.currentStep >= 0 ? state.steps[state.currentStep] : null;
+  const progress = state.steps.length ? (state.currentStep + 1) / state.steps.length * 100 : 0;
+  const cat      = state.algo ? getCategoryOfAlgo(state.algo.id) : null;
+  const loading  = state.streaming;
+  const hasSteps = state.steps.length > 0;
+
+  const wsLabel = {
+    connected:    'ready',
+    connecting:   'connecting…',
+    disconnected: 'offline',
+    loading:      'streaming…',
+  }[state.wsStatus] || state.wsStatus;
+
+  document.getElementById('root').innerHTML = `
+    <div class="sidebar">
+      <div class="logo">AlgoViz<span>WebSocket · FastAPI backend</span></div>
+      <div class="algo-scroll">
+        ${Object.entries(ALGORITHMS).map(([c, algos]) => `
+          <div class="nav-section">
+            <div class="nav-label">${c}</div>
+            ${algos.map(a => `
+              <div class="nav-item ${state.algo?.id === a.id ? 'active' : ''}"
+                   onclick="selectAlgo('${c}','${a.id}')">
+                <div class="nav-dot" style="background:${catColor(c)}"></div>
+                ${a.name}
+              </div>`).join('')}
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        ${state.algo ? `
+          <span class="algo-title">${state.algo.name}</span>
+          <span class="cat-tag cat-${cat}">${cat}</span>
+          <span class="complexity-badge time">T: ${state.algo.time}</span>
+          <span class="complexity-badge space">S: ${state.algo.space}</span>
+        ` : '<span class="algo-title" style="color:var(--text3)">Select an algorithm</span>'}
+        <div class="topbar-right">
+          <div class="ws-status ${state.wsStatus}" title="WebSocket ${wsLabel}"></div>
+          <span class="status-label">${wsLabel}</span>
+          ${hasSteps ? `<span style="font-size:11px;color:var(--text3)">${state.steps.length} steps</span>` : ''}
+        </div>
+      </div>
+
+      ${state.algo ? `
+        <div class="input-panel">
+          ${renderInputPanel(cat)}
+          <button class="btn random-btn" onclick="randomize()">⟳ Random</button>
+          <button class="btn primary" onclick="runAlgo()" ${loading ? 'disabled' : ''}>
+            ${loading ? '⏳ Streaming…' : '▶ Run'}
+          </button>
+          ${loading ? `<button class="btn danger" onclick="stopWS()">■ Stop</button>` : ''}
+        </div>
+
+        <div class="controls">
+          <button class="btn" onclick="reset()">⟨⟨</button>
+          <button class="btn" onclick="stepTo(state.currentStep-1)"
+            ${state.currentStep <= 0 ? 'disabled' : ''}>⟨</button>
+          <button class="btn primary" onclick="${state.playing ? 'pause()' : 'play()'}"
+            ${!hasSteps ? 'disabled' : ''}>
+            ${state.playing ? '⏸ Pause' : '▶ Play'}
+          </button>
+          <button class="btn" onclick="stepTo(state.currentStep+1)"
+            ${state.currentStep >= state.steps.length - 1 ? 'disabled' : ''}>⟩</button>
+          <button class="btn" onclick="stepTo(state.steps.length-1)"
+            ${!hasSteps ? 'disabled' : ''}>⟩⟩</button>
+          <div class="speed-wrap">
+            <label>Slow</label>
+            <input type="range" min="50" max="1000" step="50" value="${1050-state.speed}"
+              oninput="state.speed=1050-this.value;if(state.playing){pause();play();}">
+            <label>Fast</label>
+          </div>
+          <span class="step-counter">${state.currentStep+1} / ${state.steps.length}</span>
+        </div>
+
+        <div class="${loading ? 'loading-bar active' : 'progress-bar'}">
+          ${!loading ? `<div class="progress-fill" style="width:${progress}%"></div>` : ''}
+        </div>
+
+        <div class="viz-area" style="position:relative">
+          ${state.error ? `
+            <div class="error-toast">
+              <span>⚠ ${state.error}</span>
+              <span class="error-toast-close" onclick="clearError()">✕</span>
+            </div>` : ''}
+          ${loading && !hasSteps
+            ? `<div class="welcome">
+                <div class="ws-status loading" style="width:14px;height:14px;margin-bottom:4px"></div>
+                <p>Waiting for backend to stream steps…</p>
+               </div>`
+            : renderViz(step, cat)}
+        </div>
+
+        <div class="step-panel">
+          ${step
+            ? `<span class="step-type ${step.type}">${step.type}</span>
+               <span class="step-desc">${step.desc}</span>`
+            : loading
+              ? `<span class="step-desc" style="color:var(--text3)">Receiving steps from backend…</span>`
+              : `<span class="step-desc" style="color:var(--text3)">Press Run — backend streams steps in real-time</span>`}
+        </div>
+      ` : `
+        <div class="viz-area">
+          <div class="welcome">
+            <h2>Algorithm Visualizer</h2>
+            <p>Select any algorithm from the sidebar to begin.</p>
+            <p style="margin-top:8px">Steps are streamed live from your FastAPI backend via WebSocket.</p>
+            <div style="margin-top:20px;display:flex;align-items:center;gap:8px">
+              <div class="ws-status ${state.wsStatus}"></div>
+              <code style="font-size:11px;color:var(--accent2)">ws://localhost:8000/ws/algorithm</code>
+            </div>
+          </div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  GLOBAL ACTION BINDINGS  — expose to inline onclick handlers
+// ═══════════════════════════════════════════════════════════════════════════
+window.selectAlgo = function(cat, id) {
+  pausePlayback();
+  state.algo        = ALGORITHMS[cat].find(a => a.id === id);
+  state.steps       = [];
+  state.currentStep = -1;
+  state.error       = null;
+  render();
+};
+
+window.runAlgo   = runAlgo;
+window.stopWS    = stopWS;
+window.play      = play;
+window.pause     = pause;
+window.reset     = reset;
+window.stepTo    = stepTo;
+window.randomize = randomize;
+window.clearError= clearError;
+window.state     = state;   // expose for browser console debugging
+
+render();
+</script>
+</body>
+</html>
