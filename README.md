@@ -191,10 +191,69 @@ Uses WebSocket for real-time updates
 Receives streamed steps
 Animates visualization dynamically
 
+## 🚀 Advanced Features (Implemented)
+
+### 🔐 JWT Authentication
+
+* Secure user authentication using JSON Web Tokens (JWT)
+* Passwords hashed using bcrypt via Passlib
+* Token-based access control for protected routes
+* `/auth/register`, `/auth/login`, `/auth/me` endpoints implemented
+* Stateless authentication (no server-side session storage)
+
+**Tech Stack:**
+
+* FastAPI Security
+* python-jose (JWT)
+* Passlib (bcrypt hashing)
+
+---
+
+### 🗄️ PostgreSQL User History
+
+* Integrated PostgreSQL database for persistent storage
+* Stores user data and activity history
+* SQLAlchemy ORM used for database modeling
+* Environment-based configuration using `.env`
+
+**Features:**
+
+* User registration & login stored in DB
+* Scalable schema design for future analytics
+* Ready for storing algorithm run history
+
+**Tech Stack:**
+
+* PostgreSQL
+* SQLAlchemy
+* psycopg2
+
+---
+
+### 🤖 AI Step Explanations
+
+* Integrated AI-powered explanations for algorithm steps
+* Backend generates contextual explanations for each step
+* Frontend displays explanations alongside visualization
+
+**Features:**
+
+* Real-time explanation of algorithm behavior
+* Enhances learning and understanding
+* Can be extended with LLM APIs (Gemini / OpenAI)
+
+**Future Scope:**
+
+* "Explain this step" button
+* Natural language Q&A for algorithms
+
+**Tech Stack:**
+
+* LLM API (Gemini / OpenAI)
+* FastAPI backend integration
+
+
 ## 📌 Future Improvements
-- 🔐 JWT Authentication
-- 🗄️ PostgreSQL user history
 - ⚡ Redis caching
 - 📊 Algorithm comparison mode
-- 🤖 AI step explanations in UI
 - 🎨 Advanced frontend (React)
